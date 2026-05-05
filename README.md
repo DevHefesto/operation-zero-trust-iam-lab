@@ -1,6 +1,6 @@
 # Operation Zero Trust — IAM Lab
 
-![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)
+![Status](https://img.shields.io/badge/status-conclu%C3%ADdo-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Platform](https://img.shields.io/badge/platform-Microsoft%20Entra%20ID-0078D4?logo=microsoft)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -32,6 +32,7 @@ operation-zero-trust-iam-lab/
 ├── .gitignore                ← Protege .env de ser commitado
 ├── requirements.txt          ← Dependências Python
 ├── README.md                 ← Este arquivo
+├── screenshots/              ← Evidências de execução real
 ├── scripts/
 │   ├── 01_auth_and_list_users.py   ← OAuth 2.0 + Inventário de identidades
 │   ├── 02_create_test_users.py     ← Provisionamento de usuários por perfil de risco
@@ -69,7 +70,7 @@ operation-zero-trust-iam-lab/
 ### 1. Clone o repositório
 
 ```bash
-git clone https://github.com/seu-usuario/operation-zero-trust-iam-lab.git
+git clone https://github.com/DevHefesto/operation-zero-trust-iam-lab.git
 cd operation-zero-trust-iam-lab
 ```
 
@@ -126,21 +127,32 @@ os usuários do tenant formatados em tabela.
 **Conceito IAM demonstrado:** Visibilidade de identidades (NIST CSF — Identify).
 Em Zero Trust, não é possível proteger o que não se conhece.
 
-**Output esperado:**
+**Output real obtido:**
+
 ```
 ======================================================================
   OPERATION ZERO TRUST — Script 01: Auth + Inventário de Identidades
 ======================================================================
 [*] Solicitando token de acesso ao Microsoft Entra ID...
-[OK] Token obtido com sucesso. Expira em: 3599 segundos (~59 minutos)
+[OK] Token obtido com sucesso.
+     Tipo: Bearer
+     Expira em: 3599 segundos (~59 minutos)
 [*] Consultando usuários via Graph API...
 
-╭──────────────────────┬──────────────────────────────┬──────────╮
-│ Nome                 │ UPN (Login)                  │ Status   │
-├──────────────────────┼──────────────────────────────┼──────────┤
-│ Pedro Macedo         │ pedro@dominio.com             │ ATIVO    │
-╰──────────────────────┴──────────────────────────────┴──────────╯
+======================================================================
+  INVENTÁRIO DE IDENTIDADES — 1 usuário(s) encontrado(s)
+======================================================================
+╭──────────────────┬──────────────────────────────────────────────────┬───────╮
+│ Nome             │ UPN (Login)                                      │ Status│
+├──────────────────┼──────────────────────────────────────────────────┼───────┤
+│ pedro Macedo     │ pedromacedo51_hotmail.com#EXT#@[tenant].onmicro… │ ATIVO │
+╰──────────────────┴──────────────────────────────────────────────────┴───────╯
 ```
+
+> **Observação técnica:** O `#EXT#` no UPN indica **External User** — conta Microsoft
+> pessoal (Hotmail) federada no tenant via B2B. Este formato replica exatamente o
+> modelo de identidade de contratados externos, análogo ao vetor inicial do ataque
+> Uber 2022. Identidades externas exigem controles adicionais de Conditional Access.
 
 ---
 
@@ -160,6 +172,9 @@ python scripts/02_create_test_users.py
 
 **Conceito IAM demonstrado:** Provisionamento de identidades com consciência
 de perfil de risco (IGA — Identity Governance & Administration).
+
+**Output real obtido:** 3 usuários criados com sucesso via `POST /v1.0/users`.
+Senhas temporárias geradas com `secrets.choice()` (CSPRNG) — nunca `random()`.
 
 ---
 
@@ -185,6 +200,19 @@ limitar o blast radius em caso de comprometimento de credencial.
 que não eram necessários para sua função. Com RBAC granular, mesmo com a
 credencial comprometida, o invasor não teria chegado ao Thycotic.
 
+**O que realmente aconteceu na execução:**
+
+- **1ª execução:** papéis não encontrados via API — ainda não estavam ativados
+  no tenant. Comportamento esperado do Entra ID: papéis built-in existem no
+  catálogo global mas precisam ser instanciados no tenant antes de serem gerenciados.
+- **Solução aplicada:** papéis ativados manualmente no portal Entra ID:
+  *Leitor Global* → `uber-admin` · *Administrador da Assistência Técnica* → `uber-contractor`
+- **2ª execução:** retornou HTTP 400 "already exists" — as atribuições já estavam
+  corretas no tenant. O script interpretou como falha, mas o estado real estava certo.
+- **Lição:** a fonte de verdade em automações IAM é sempre a API de leitura, não
+  o código de status da operação de escrita. Queries de verificação são mais
+  confiáveis que respostas de `POST`/`PATCH`.
+
 ---
 
 ### Script 04 — Relatório de Auditoria IAM
@@ -200,12 +228,22 @@ e gera um relatório de postura Zero Trust do lab.
 (NIST CSF — Detect). Auditorias proativas são a diferença entre detectar um
 ataque em 8 horas (Uber) e em 8 minutos.
 
+**Output real obtido:**
+
+- **52 eventos de auditoria** capturados — linha do tempo forense completa:
+  registro do app, configuração de permissões, criação dos 3 usuários, atribuição
+  de papéis. Toda a cadeia de ações do lab rastreada pelo Entra ID.
+- **Sign-in logs indisponíveis** — `AuditLog.Read.All` concedida como Application,
+  mas logs de autenticação exigem licença **Entra ID P1 ou P2**. Limitação
+  documentada; em produção, P1 é o mínimo recomendado para segurança.
+- **Postura Zero Trust:** 4 controles `IMPLEMENTADO`, 4 `NÃO TESTADO`.
+
 ---
 
 ## O Que Este Lab Demonstra para Recrutadores de IAM
 
-Este projeto demonstra, com código funcional, as competências centrais de um
-profissional de IAM / Cybersecurity:
+Este projeto demonstra, com código funcional e execução real documentada,
+as competências centrais de um profissional de IAM / Cybersecurity:
 
 | Competência | Onde é demonstrada |
 |-------------|-------------------|
@@ -220,13 +258,72 @@ profissional de IAM / Cybersecurity:
 
 ---
 
+## Lições Aprendidas
+
+Situações reais encontradas durante a execução do lab — parte integrante
+do aprendizado prático de IAM.
+
+**Permissões Delegated vs. Application**
+Client Credentials Flow exige permissões do tipo `Application`, não `Delegated`.
+A tentativa inicial com permissões Delegadas gerou erro silencioso de autenticação
+sem mensagem clara. Este é um dos erros mais comuns na integração com a Graph API
+e um conceito central para qualquer automação IAM.
+
+**Ativação de papéis built-in no Entra ID**
+Papéis como *Global Reader* e *Helpdesk Administrator* existem no catálogo global
+do Entra ID, mas precisam ser **instanciados** no tenant antes de serem gerenciáveis
+via API. Em produção, times de IAM mantêm um catálogo de papéis pré-ativados como
+parte do processo de onboarding de tenant.
+
+**Idempotência em automações IAM**
+HTTP 400 "already exists" não é um erro — é confirmação de estado desejado.
+Automações robustas de IAM devem **verificar o estado atual antes de escrever**,
+não interpretar respostas de escrita como indicadores de sucesso ou falha.
+O padrão correto: `GET` para verificar → `POST`/`PATCH` apenas se necessário.
+
+**Timeout em queries de auditoria**
+`GET /auditLogs/directoryAudits` pode ultrapassar 30s em tenants com muitos eventos.
+Em produção: use filtros de data mais curtos, paginação agressiva e considere
+streaming via Microsoft Graph Change Notifications para volumes altos.
+
+**External User (`#EXT#`) como modelo de contratado**
+Conta Microsoft pessoal (Hotmail) federada via B2B gera UPN com sufixo `#EXT#` —
+replicando exatamente o modelo de identidade externa do ataque Uber 2022.
+Identidades externas requerem políticas de Conditional Access específicas,
+revisões de acesso mais frequentes e escopo de convite explicitamente limitado.
+
+---
+
 ## Próximos Passos (Roadmap)
 
+**Fase 1 — Concluída**
+- [x] Script 01 — OAuth 2.0 + Inventário de identidades
+- [x] Script 02 — Provisionamento por perfil de risco
+- [x] Script 03 — RBAC + Least Privilege
+- [x] Script 04 — Auditoria contínua + Postura Zero Trust
+
+**Fase 2 — Em desenvolvimento**
 - [ ] Script 05 — Conditional Access Policies via Graph API
-- [ ] Script 06 — Simulação de MFA Fatigue com alertas no Sentinel
-- [ ] Script 07 — Relatório de Access Review automatizado
+- [ ] Script 06 — Simulação de MFA Fatigue + alertas
+- [ ] Script 07 — Access Review automatizado
+
+**Fase 3 — Planejada**
 - [ ] Integração com Microsoft Sentinel (SIEM)
 - [ ] Terraform para provisionamento da infra do lab
+
+---
+
+## Screenshots do Lab
+
+| Script | Evidência |
+|--------|-----------|
+| Script 01 — Token OAuth + Inventário | [screenshots/01_auth_inventario.jpg](screenshots/01_auth_inventario.jpg) |
+| Script 02 — Criação de usuários por perfil de risco | [screenshots/02_criacao_usuarios.jpg](screenshots/02_criacao_usuarios.jpg) |
+| Script 03 — 2ª execução (idempotência HTTP 400) | [screenshots/06_rbac_segunda_execucao.jpg](screenshots/06_rbac_segunda_execucao.jpg) |
+| Script 03 — Leitor Global atribuído no Entra ID | [screenshots/04_leitor_global.jpg](screenshots/04_leitor_global.jpg) |
+| Script 03 — Helpdesk Admin atribuído no Entra ID | [screenshots/05_helpdesk_admin.jpg](screenshots/05_helpdesk_admin.jpg) |
+| Script 04 — Postura Zero Trust | [screenshots/07_postura_zero_trust.jpg](screenshots/07_postura_zero_trust.jpg) |
+| Script 04 — Log de auditoria | [screenshots/08_audit_log.jpg](screenshots/08_audit_log.jpg) |
 
 ---
 
